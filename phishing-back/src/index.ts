@@ -1,32 +1,44 @@
-/**
- * Welcome to Cloudflare Workers! This is your first worker.
- *
- * - Run `npm run dev` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your worker in action
- * - Run `npm run deploy` to publish your worker
- *
- * Learn more at https://developers.cloudflare.com/workers/
- */
+import { Hono } from 'hono'
+import type { MiddlewareHandler } from 'hono'
 
-export interface Env {
-	// Example binding to KV. Learn more at https://developers.cloudflare.com/workers/runtime-apis/kv/
-	// MY_KV_NAMESPACE: KVNamespace;
-	//
-	// Example binding to Durable Object. Learn more at https://developers.cloudflare.com/workers/runtime-apis/durable-objects/
-	// MY_DURABLE_OBJECT: DurableObjectNamespace;
-	//
-	// Example binding to R2. Learn more at https://developers.cloudflare.com/workers/runtime-apis/r2/
-	// MY_BUCKET: R2Bucket;
-	//
-	// Example binding to a Service. Learn more at https://developers.cloudflare.com/workers/runtime-apis/service-bindings/
-	// MY_SERVICE: Fetcher;
-	//
-	// Example binding to a Queue. Learn more at https://developers.cloudflare.com/queues/javascript-apis/
-	// MY_QUEUE: Queue;
+type AppContext = {
+  Bindings: {
+    sisinfo_phishing: KVNamespace
+  }
 }
 
-export default {
-	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-		return new Response('Hello World!');
-	},
-};
+const app = new Hono<AppContext>().basePath('/')
+
+const countProtection: MiddlewareHandler<AppContext> = async (c, next) => {
+	const victims = await c.env.sisinfo_phishing.get("victims")
+	if (victims === null) {
+		c.env.sisinfo_phishing.put("victims", "[]")
+	}
+  await next()
+}
+
+app.get('/victims', countProtection, async (c) => {
+	const victims = await c.env.sisinfo_phishing.get("victims")
+  return c.json({
+    victims: victims
+  })
+})
+
+app.post('/victim', countProtection, async (c) => {
+	const body = await c.req.parseBody()
+	const username = body.username
+	const victims = await c.env.sisinfo_phishing.get("victims")
+	await c.env.sisinfo_phishing.put("victims", JSON.stringify([...JSON.parse(victims!), username]))
+	return c.json({
+		"moralOfTheStory": "Don't get phished!"
+	})
+})
+
+app.delete('/victims-secret-path', countProtection, async (c) => {
+	await c.env.sisinfo_phishing.put("victims", "[]")
+	return c.json({
+		"moralOfTheStory": "Victims list reset!"
+	})
+})
+
+export default app
