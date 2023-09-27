@@ -25,14 +25,15 @@ const countProtection: MiddlewareHandler<AppContext> = async (c, next) => {
 
 app.get('/victims', countProtection, async (c) => {
 	const victims = await c.env.sisinfo_phishing.get('victims');
+	const victims_len = JSON.parse(victims || '[]').length;
 	return c.json({
-		victims: victims,
+		victims: victims_len,
 	});
 });
 
 app.post('/victim', countProtection, async (c) => {
 	const body = await c.req.parseBody();
-	const username = body.username;
+	const username = 'victim';
 	const victims = await c.env.sisinfo_phishing.get('victims');
 	await c.env.sisinfo_phishing.put('victims', JSON.stringify([...JSON.parse(victims!), username]));
 	return c.json({
